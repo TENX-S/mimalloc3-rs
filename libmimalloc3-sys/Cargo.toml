@@ -1,6 +1,6 @@
 [package]
 name = "libmimalloc3-sys"
-version = "3.1.6-dev3+639b73e"
+version = "3.1.6-dev3+639b73e.1"
 edition = "2024"
 authors = ["Andrew Ares <coopersjy@gmail.com>"]
 keywords = ["mimalloc", "allocator", "encrypted-heap", "performance"]
