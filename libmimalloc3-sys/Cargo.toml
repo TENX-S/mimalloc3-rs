@@ -3,6 +3,7 @@ name = "libmimalloc3-sys"
 version = "3.1.6-dev1+639b73e"
 edition = "2024"
 authors = ["Andrew Ares <coopersjy@gmail.com>"]
+repository = "https://github.com/TENX-S/mimalloc3-rs/tree/main/libmimalloc3-sys"
 keywords = ["mimalloc", "allocator", "encrypted-heap", "performance"]
 categories = ["memory-management", "external-ffi-bindings", "api-bindings"]
 description = "Native bindings to the mimalloc library"
