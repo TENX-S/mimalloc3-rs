@@ -1,6 +1,6 @@
 [package]
 name = "libmimalloc3-sys"
-version = "3.1.6-dev3+639b73e.1"
+version = "3.1.6-dev3+639b73e.2"
 edition = "2024"
 authors = ["Andrew Ares <coopersjy@gmail.com>"]
 keywords = ["mimalloc", "allocator", "encrypted-heap", "performance"]
@@ -39,7 +39,7 @@ padding = []
 # Note: mimalloc says "it is only possible to override malloc on Windows when building as a DLL."
 # (Refer to https://github.com/microsoft/mimalloc/blob/639b73ecf9608d9c3078cb9dee5b7c2f46639828/CMakeLists.txt#L776)
 # so on windows this feature .
-override = []
+override = ["osx_interpose", "osx_zone"]
 
 # Enable abort() call on memory allocation failure by default
 xmalloc = []

@@ -61,7 +61,11 @@ fn main() {
     cfg.define("MI_SEE_ASM", "ON");
 
     #[cfg(all(target_os = "macos", feature = "osx_interpose"))]
-    cfg.define("MI_OSX_INTERPOSE", "ON");
+    {
+        cfg.define("MI_OSX_INTERPOSE", "ON");
+        #[cfg(feature = "use_cxx")]
+        println!("cargo:warning=if dynamically overriding malloc/free, it is more reliable to build mimalloc as C code (don't enable feature use-cxx)")
+    }
 
     #[cfg(all(target_os = "macos", feature = "osx_zone"))]
     cfg.define("MI_OSX_ZONE", "ON");
