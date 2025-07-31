@@ -1,0 +1,20 @@
+[package]
+name = "mimalloc3-rs"
+version = "0.0.1"
+edition = "2024"
+authors = ["Andrew Ares <coopersjy@gmail.com>"]
+repository = "https://github.com/TENX-S/mimalloc3-rs"
+keywords = ["mimalloc", "allocator", "encrypted-heap", "performance"]
+categories = ["memory-management", "api-bindings"]
+description = "mimalloc is a compact general purpose allocator with excellent performance."
+license-file = "LICENSE"
+readme = "README.md"
+
+[dependencies]
+libmimalloc3-sys = { path = "libmimalloc3-sys" }
+
+[workspace]
+members = ["libmimalloc3-sys"]
+
+[features]
+default = []

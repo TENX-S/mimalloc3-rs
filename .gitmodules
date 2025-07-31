@@ -1,0 +1,4 @@
+[submodule "libmimalloc3-sys/mimalloc"]
+	path = libmimalloc3-sys/mimalloc
+	url = https://github.com/microsoft/mimalloc.git
+	branch = dev3

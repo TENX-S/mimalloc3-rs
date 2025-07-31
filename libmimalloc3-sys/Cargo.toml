@@ -1,0 +1,103 @@
+[package]
+name = "libmimalloc3-sys"
+version = "3.1.6-beta.1"
+edition = "2024"
+links = "mimalloc"
+
+[dependencies]
+
+[build-dependencies]
+cmake = "0.1"
+
+[features]
+default = ["override", "static"]
+
+# Build the libmimalloc as a static library
+static = []
+
+# Build the libmimalloc as a dynamic library
+shared = []
+
+# See https://github.com/microsoft/mimalloc/blob/639b73ecf9608d9c3078cb9dee5b7c2f46639828/CMakeLists.txt
+# Use full security mitigations (like guard pages, allocation randomization,
+# double-free mitigation,and free-list corruption detection)
+secure = []
+
+# Use full internal heap invariant checking in DEBUG mode (expensive)
+debug-full = []
+
+# Enable padding to detect heap block overflow (always on in DEBUG or SECURE mode, or with Valgrind/ASAN)
+padding = []
+
+# Override the standard malloc interface (i.e. define entry points for 'malloc', 'free', etc)
+# Note: mimalloc says "it is only possible to override malloc on Windows when building as a DLL."
+# (Refer to https://github.com/microsoft/mimalloc/blob/639b73ecf9608d9c3078cb9dee5b7c2f46639828/CMakeLists.txt#L776)
+# so on windows this feature .
+override = []
+
+# Enable abort() call on memory allocation failure by default
+xmalloc = []
+
+# Show error and warning messages by default (only enabled by default in DEBUG mode)
+show_errors = []
+
+# Build with guard pages behind certain object allocations (implies MI_NO_PADDING=ON)
+guarded = []
+
+# Use the C++ compiler to compile the library (instead of the C compiler)
+use_cxx = []
+
+# Only for optimized builds: turn on architecture specific optimizations
+# (for x64: '-march=haswell;-mavx2' (2013), for arm64: '-march=armv8.1-a' (2016))
+opt_arch = []
+
+# Use SIMD instructions (requires MI_OPT_ARCH to be enabled)
+opt_simd = []
+
+# Generate assembly files
+see_asm = []
+
+# Use interpose to override standard malloc on macOS
+osx_interpose = []
+
+# Use malloc zone to override standard malloc on macOS
+osx_zone = []
+
+# Use redirection module ('mimalloc-redirect') on Windows if compiling mimalloc as a DLL
+win_redirect = []
+
+# Use a fixed TLS slot on Windows to avoid extra tests in the malloc fast path
+win_use_fixed_tls = []
+
+# Use local-dynamic-tls, a slightly slower but dlopen-compatible thread local storage mechanism (Unix)
+local_dynamic_tls = []
+
+# Build with thread sanitizer (needs clang)
+debug_asan = []
+
+# Build with undefined-behavior sanitizer (needs clang++)
+debug_ubsan = []
+
+# Compile with Valgrind support (adds a small overhead)
+track_valgrind = []
+
+# Compile with address sanitizer support (adds a small overhead)
+track_asan = []
+
+# Compile with Windows event tracing (ETW) support (adds a small overhead)
+track_etw = []
+
+# Build object library
+build_object = []
+
+# Build test executables
+build_tests = []
+
+# Skip collecting memory on program exit
+skip_collect_on_exit = []
+
+# Force no use of padding even in DEBUG mode etc.
+no_padding = []
+
+# Disable transparent huge pages support on Linux/Android for the mimalloc process only
+no_thp = []
