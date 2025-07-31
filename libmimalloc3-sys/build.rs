@@ -55,7 +55,10 @@ fn main() {
     cfg.define("MI_OPT_ARCH", "ON");
 
     #[cfg(feature = "opt_simd")]
-    cfg.define("MI_OPT_SIMD", "ON");
+    {
+        cfg.define("MI_OPT_SIMD", "ON");
+        cfg.cflag("-flax-vector-conversions");
+    }
 
     #[cfg(feature = "see_asm")]
     cfg.define("MI_SEE_ASM", "ON");
