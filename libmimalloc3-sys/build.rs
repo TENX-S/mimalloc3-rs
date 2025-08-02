@@ -145,5 +145,5 @@ fn main() {
         lib += "-debug";
     }
 
-    println!("cargo:rustc-link-lib={}={}", link_type, lib);
+    println!("cargo:rustc-link-lib={link_type}={lib}");
 }
