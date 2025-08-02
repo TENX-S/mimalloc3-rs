@@ -1,3 +1,4 @@
+use std::process::Command;
 
 fn main() {
     #[cfg(all(feature = "static", feature = "shared"))]
@@ -9,120 +10,140 @@ fn main() {
     #[cfg(all(feature = "static", feature = "override", target_os = "windows"))]
     compile_error!("It is only possible to override malloc on Windows when building as a DLL.");
 
+    println!("cargo:rerun-if-changed=build.rs");
+    println!("cargo:rerun-if-changed=mimalloc/");
+
     let mut cfg = cmake::Config::new("mimalloc");
 
-    let linkage: &str;
+    macro_rules! feat_opt {
+        ($feat:literal, $opt:literal) => {
+            #[cfg(feature = $feat)]
+            cfg.define($opt, "ON");
+        };
 
-    #[cfg(feature = "static")]
-    {
+        ($feat:literal, $body:block) => {
+            #[cfg(feature = $feat)]
+            $body
+        };
+    }
+
+    let link_type: &str;
+
+    feat_opt!("static", {
         cfg.define("MI_BUILD_STATIC", "ON");
         cfg.define("MI_BUILD_SHARED", "OFF");
-        linkage = "static";
-    }
+        link_type = "static";
+    });
 
-    #[cfg(feature = "shared")]
-    {
+    feat_opt!("shared", {
         cfg.define("MI_BUILD_STATIC", "OFF");
         cfg.define("MI_BUILD_SHARED", "ON");
-        linkage = "dylib";
-    }
+        link_type = "dylib";
+    });
 
-    #[cfg(feature = "secure")]
-    cfg.define("MI_SECURE", "ON");
-
-    #[cfg(feature = "debug-full")]
-    cfg.define("MI_DEBUG_FULL", "ON");
-
-    #[cfg(feature = "padding")]
-    cfg.define("MI_PADDING", "ON");
-
-    #[cfg(feature = "override")]
-    cfg.define("MI_OVERRIDE", "ON");
-
-    #[cfg(feature = "xmalloc")]
-    cfg.define("MI_XMALLOC", "ON");
-
-    #[cfg(feature = "show_errors")]
-    cfg.define("MI_SHOW_ERRORS", "ON");
-
-    #[cfg(feature = "guarded")]
-    cfg.define("MI_GUARDED", "ON");
-
-    #[cfg(feature = "use_cxx")]
-    cfg.define("MI_USE_CXX", "ON");
-
-    #[cfg(feature = "opt_arch")]
-    cfg.define("MI_OPT_ARCH", "ON");
-
-    #[cfg(feature = "opt_simd")]
-    {
+    feat_opt!("secure", "MI_SECURE");
+    feat_opt!("debug_full", "MI_DEBUG_FULL");
+    feat_opt!("padding", "MI_PADDING");
+    feat_opt!("override", "MI_OVERRIDE");
+    feat_opt!("xmalloc", "MI_XMALLOC");
+    feat_opt!("show_errors", "MI_SHOW_ERRORS");
+    feat_opt!("guarded", "MI_GUARDED");
+    feat_opt!("use_cxx", "MI_USE_CXX");
+    feat_opt!("opt_arch", "MI_OPT_ARCH");
+    feat_opt!("opt_simd", {
         cfg.define("MI_OPT_SIMD", "ON");
         cfg.cflag("-flax-vector-conversions");
-    }
+    });
+    feat_opt!("see_asm", "MI_SEE_ASM");
 
-    #[cfg(feature = "see_asm")]
-    cfg.define("MI_SEE_ASM", "ON");
-
-    #[cfg(all(target_os = "macos", feature = "osx_interpose"))]
+    #[cfg(target_os = "macos")]
     {
-        cfg.define("MI_OSX_INTERPOSE", "ON");
-        #[cfg(feature = "use_cxx")]
-        println!("cargo:warning=if dynamically overriding malloc/free, it is more reliable to build mimalloc as C code (don't enable feature use-cxx)")
+        feat_opt!("osx_interpose", {
+            cfg.define("MI_OSX_INTERPOSE", "ON");
+            #[cfg(all(feature = "shared", feature = "use_cxx"))]
+            println!("cargo:warning=if dynamically overriding malloc/free, it is more reliable to build mimalloc as C code (don't enable feature use-cxx)")
+        });
+        feat_opt!("osx_zone", "MI_OSX_ZONE");
     }
 
-    #[cfg(all(target_os = "macos", feature = "osx_zone"))]
-    cfg.define("MI_OSX_ZONE", "ON");
+    #[cfg(target_os = "windows")]
+    {
+        feat_opt!("win_redirect", "MI_WIN_REDIRECT");
+        feat_opt!("win_use_fixed_tls", "MI_WIN_USE_FIXED_TLS");
+    }
 
-    #[cfg(all(target_os = "windows", feature = "win_redirect"))]
-    cfg.define("MI_WIN_REDIRECT", "ON");
+    #[cfg(target_family = "unix")]
+    feat_opt!("local_dynamic_tls", "MI_LOCAL_DYNAMIC_TLS");
 
-    #[cfg(all(target_os = "windows", feature = "win_use_fixed_tls"))]
-    cfg.define("MI_WIN_USE_FIXED_TLS", "ON");
-
-    #[cfg(all(target_family = "unix", feature = "local_dynamic_tls"))]
-    cfg.define("MI_LOCAL_DYNAMIC_TLS", "ON");
-
-    #[cfg(all(target_env = "musl"))]
+    #[cfg(target_env = "musl")]
     cfg.define("MI_LIBC_MUSL", "ON");
 
-    #[cfg(feature = "debug_asan")]
-    cfg.define("MI_DEBUG_ASAN", "ON");
-
-    #[cfg(feature = "debug_ubsan")]
-    cfg.define("MI_DEBUG_UBSAN", "ON");
-
-    #[cfg(feature = "track_valgrind")]
-    cfg.define("MI_TRACK_VALGRIND", "ON");
-
-    #[cfg(feature = "track_asan")]
-    cfg.define("MI_TRACK_ASAN", "ON");
-
-    #[cfg(feature = "track_etw")]
-    cfg.define("MI_TRACK_ETW", "ON");
+    feat_opt!("debug_asan", "MI_DEBUG_ASAN");
+    feat_opt!("debug_ubsan", "MI_DEBUG_UBSAN");
+    feat_opt!("track_valgrind", "MI_TRACK_VALGRIND");
+    feat_opt!("track_asan", "MI_TRACK_ASAN");
+    feat_opt!("track_etw", "MI_TRACK_ETW");
 
     cfg.define("MI_BUILD_OBJECT", "OFF");
-    #[cfg(feature = "build_object")]
-    cfg.define("MI_BUILD_OBJECT", "ON");
+    feat_opt!("build_object", "MI_BUILD_OBJECT");
 
     cfg.define("MI_BUILD_TESTS", "OFF");
-    #[cfg(feature = "build_tests")]
-    cfg.define("MI_BUILD_TESTS", "ON");
+    feat_opt!("build_tests", "MI_BUILD_TESTS");
 
-    #[cfg(feature = "skip_collect_on_exit")]
-    cfg.define("MI_SKIP_COLLECT_ON_EXIT", "ON");
+    feat_opt!("skip_collect_on_exit", "MI_SKIP_COLLECT_ON_EXIT");
+    feat_opt!("no_padding", "MI_NO_PADDING");
 
-    #[cfg(feature = "no_padding")]
-    cfg.define("MI_NO_PADDING", "ON");
+    #[cfg(any(target_os = "linux", target_os = "android"))]
+    feat_opt!("no_thp", "MI_NO_THP");
 
-    #[cfg(all(any(target_os = "linux", target_os = "android"), feature = "no_thp"))]
-    cfg.define("MI_NO_THP", "ON");
+    // When using a GNU-like compiler, the `__thread` keyword for thread-local storage
+    // (as used in mimalloc) implies a dependency on the `__emutls_get_address` symbol.
+    // We must explicitly link against libgcc_eh to provide this symbol.
+    if cc::Build::new().get_compiler().is_like_gnu() {
+        println!("cargo:rustc-link-lib=gcc_eh");
+    }
+
+    // Workaround for Apple Silicon (aarch64) macOS.
+    // The default MI_ARENA_SLICE_SIZE in mimalloc fails to satisfy the
+    // `_mi_os_page_size() <= (MI_ARENA_SLICE_SIZE / 8)` assertion on this platform.
+    // This script dynamically retrieves the OS page size and overrides the macro
+    // to ensure the assertion passes.
+    #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+    {
+        let output = Command::new("getconf").arg("PAGESIZE").output().unwrap();
+        if output.status.success() {
+            let pagesize: usize = std::str::from_utf8(&output.stdout).unwrap().trim().parse().unwrap();
+            let arena_slice_size = pagesize * 8;
+            let out_dir = std::path::PathBuf::from(std::env::var("OUT_DIR").unwrap());
+            let header_path = out_dir.join("override_mi_arena_slice_size.h");
+            let mimalloc_include_path = std::env::current_dir().unwrap().join("mimalloc/include");
+            let types_header_path = mimalloc_include_path.join("mimalloc/types.h");
+            let header_content = format!(r#"#include "{}"
+
+#ifdef MI_ARENA_SLICE_SIZE
+#undef MI_ARENA_SLICE_SIZE
+#endif
+
+#define MI_ARENA_SLICE_SIZE ({})"#, types_header_path.display(), arena_slice_size);
+            std::fs::write(&header_path, header_content).unwrap();
+            let flag = format!("-I{} -include {}", mimalloc_include_path.display(), header_path.display());
+            if cfg!(feature = "use_cxx") {
+                cfg.cxxflag(flag);
+            } else {
+                cfg.cflag(flag);
+            }
+        }
+    }
 
     println!("cargo:rustc-link-search=native={}/lib/mimalloc-3.1", cfg.build().display());
 
-    let mut lib = "mimalloc";
+    let mut lib = "mimalloc".to_owned();
+    if cfg!(feature = "secure") {
+        lib += "-secure";
+    }
     if cfg!(debug_assertions) {
-        lib = "mimalloc-debug";
+        lib += "-debug";
     }
 
-    println!("cargo:rustc-link-lib={}={}", linkage, lib);
+    println!("cargo:rustc-link-lib={}={}", link_type, lib);
 }
