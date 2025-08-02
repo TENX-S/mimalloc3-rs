@@ -11,8 +11,6 @@ license = "MIT"
 links = "mimalloc"
 build = "build.rs"
 
-[dependencies]
-
 [build-dependencies]
 cc = "1"
 cmake = "0.1"
@@ -26,7 +24,9 @@ static = []
 # Build the libmimalloc as a dynamic library
 shared = []
 
+# The following features is defined by cmake options of mimalloc.
 # See https://github.com/microsoft/mimalloc/blob/639b73ecf9608d9c3078cb9dee5b7c2f46639828/CMakeLists.txt
+
 # Use full security mitigations (like guard pages, allocation randomization,
 # double-free mitigation,and free-list corruption detection)
 secure = []
@@ -39,8 +39,8 @@ padding = []
 
 # Override the standard malloc interface (i.e. define entry points for 'malloc', 'free', etc)
 # Note: mimalloc says "it is only possible to override malloc on Windows when building as a DLL."
-# (Refer to https://github.com/microsoft/mimalloc/blob/639b73ecf9608d9c3078cb9dee5b7c2f46639828/CMakeLists.txt#L776)
-# so on windows this feature .
+# See https://github.com/microsoft/mimalloc/blob/639b73ecf9608d9c3078cb9dee5b7c2f46639828/CMakeLists.txt#L776
+# so on windows this feature MUST be used with shared feature.
 override = ["osx_interpose", "osx_zone"]
 
 # Enable abort() call on memory allocation failure by default
@@ -60,7 +60,7 @@ use_cxx = []
 opt_arch = []
 
 # Use SIMD instructions (requires MI_OPT_ARCH to be enabled)
-opt_simd = []
+opt_simd = ["opt_arch"]
 
 # Generate assembly files
 see_asm = []
