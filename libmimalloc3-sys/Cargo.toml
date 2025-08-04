@@ -17,10 +17,13 @@ cmake = "0.1"
 build-target = "0.8"
 
 [features]
-default = ["override", "static"]
+default = ["static"]
 
 # Build the libmimalloc as a static library
 static = []
+
+# let mimalloc link static C runtime (/MT)
+win_static_crt = []
 
 # Build the libmimalloc as a dynamic library
 shared = []

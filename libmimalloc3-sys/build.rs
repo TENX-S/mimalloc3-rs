@@ -23,6 +23,7 @@ fn main() {
     println!("cargo:rerun-if-changed=build.rs");
     println!("cargo:rerun-if-changed=mimalloc");
 
+    let mut flags = Vec::new();
     let mut cfg = cmake::Config::new("mimalloc");
 
     macro_rules! feat_opt {
@@ -76,9 +77,24 @@ fn main() {
         feat_opt!("osx_zone", "MI_OSX_ZONE");
     }
 
+    let cc_is_gnu_like = cc::Build::new().get_compiler().is_like_gnu();
     if matches!(target_os, Os::Windows) {
         feat_opt!("win_redirect", "MI_WIN_REDIRECT");
         feat_opt!("win_use_fixed_tls", "MI_WIN_USE_FIXED_TLS");
+        feat_opt!("track_etw", "MI_TRACK_ETW");
+        for lib in ["psapi", "shell32", "user32", "advapi32", "bcrypt"] {
+            println!("cargo:rustc-link-lib={}", lib);
+        }
+        if matches!(target_env, Some(Env::Msvc)) {
+            if cfg!(feature = "win_static_crt") {
+                cfg.define("CMAKE_MSVC_RUNTIME_LIBRARY", "MultiThreaded");
+            } else {
+                cfg.define("CMAKE_MSVC_RUNTIME_LIBRARY", "MultiThreadedDLL");
+            }
+        }
+        if cc_is_gnu_like {
+            flags.push("-Wno-attributes");
+        }
     }
 
     if target_family.contains(&Family::Unix) {
@@ -93,7 +109,6 @@ fn main() {
     feat_opt!("debug_ubsan", "MI_DEBUG_UBSAN");
     feat_opt!("track_valgrind", "MI_TRACK_VALGRIND");
     feat_opt!("track_asan", "MI_TRACK_ASAN");
-    feat_opt!("track_etw", "MI_TRACK_ETW");
 
     cfg.define("MI_BUILD_OBJECT", "OFF");
     feat_opt!("build_object", "MI_BUILD_OBJECT");
@@ -109,7 +124,7 @@ fn main() {
     }
 
     // mimalloc's use of `__thread` for thread-local storage on GNU-like compilers requires `__emutls_get_address`
-    if cc::Build::new().get_compiler().is_like_gnu() {
+    if cc_is_gnu_like {
         println!("cargo:rustc-link-lib=gcc_eh");
     }
 
@@ -135,9 +150,13 @@ fn main() {
 #undef MI_ARENA_SLICE_SIZE
 #endif
 
-#define MI_ARENA_SLICE_SIZE ({})"#, types_header_path.display(), arena_slice_size);
+#define MI_ARENA_SLICE_SIZE ({}UL)"#, types_header_path.display(), arena_slice_size);
         std::fs::write(&header_path, header_content).unwrap();
-        let flag = format!("-I{} -include {}", mimalloc_include_path.display(), header_path.display());
+        let flag = Box::leak(format!("-I{} -include {}", mimalloc_include_path.display(), header_path.display()).into_boxed_str());
+        flags.push(flag);
+    }
+
+    for flag in flags {
         if cfg!(feature = "use_cxx") {
             cfg.cxxflag(flag);
         } else {
