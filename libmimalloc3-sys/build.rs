@@ -1,5 +1,5 @@
+use build_target::{Arch, Env, Family, Os};
 use std::env;
-use build_target::{Os, Family, Env, Arch};
 
 const APPLE_SILICON_PAGESIZE: usize = 16384;
 
@@ -82,18 +82,34 @@ fn main() {
         feat_opt!("win_redirect", "MI_WIN_REDIRECT");
         feat_opt!("win_use_fixed_tls", "MI_WIN_USE_FIXED_TLS");
         feat_opt!("track_etw", "MI_TRACK_ETW");
-        for lib in ["psapi", "shell32", "user32", "advapi32", "bcrypt"] {
-            println!("cargo:rustc-link-lib={}", lib);
-        }
+
         if matches!(target_env, Some(Env::Msvc)) {
-            if cfg!(feature = "win_static_crt") {
+            // On Windows, we must ensure mimalloc and Rust link against the same MSVC C Runtime (CRT).
+            // Rust typically defaults to "MultiThreadedDLL" (see rust-lang/rust#39016), while mimalloc
+            // might select a debug CRT in dev builds, causing linker errors.
+            // To resolve this, we explicitly set the runtime library.
+            if cfg!(feature = "win_crt_static") {
+                // If the "win_crt_static" feature is active, we must use the static, non-debug CRT
+                // to ensure the entire application uses a consistent static runtime.
                 cfg.define("CMAKE_MSVC_RUNTIME_LIBRARY", "MultiThreaded");
             } else {
+                // Otherwise, we align with Rust's standard practice by linking against the dynamic,
+                // non-debug CRT. This prevents symbol conflicts with debug versions of the CRT.
                 cfg.define("CMAKE_MSVC_RUNTIME_LIBRARY", "MultiThreadedDLL");
             }
         }
-        if cc_is_gnu_like {
-            flags.push("-Wno-attributes");
+        if matches!(target_env, Some(Env::Gnu)) {
+            if cc_is_gnu_like {
+                flags.push("-Wno-attributes");
+            }
+            println!("cargo:rustc-link-lib=stdc++");
+            if cfg!(feature = "win_crt_static") {
+                println!("cargo:rustc-link-arg=-static-libstdc++")
+            }
+        }
+
+        for lib in ["psapi", "shell32", "user32", "advapi32", "bcrypt"] {
+            println!("cargo:rustc-link-lib={}", lib);
         }
     }
 

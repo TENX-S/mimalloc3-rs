@@ -23,7 +23,7 @@ default = ["static"]
 static = []
 
 # let mimalloc link static C runtime (/MT)
-win_static_crt = []
+win_crt_static = []
 
 # Build the libmimalloc as a dynamic library
 shared = []

@@ -16,11 +16,13 @@ libmimalloc3-sys = { path = "libmimalloc3-sys", version = "3.1.6-dev2" }
 [workspace]
 members = ["libmimalloc3-sys"]
 
+# For explanations on these features, see https://github.com/TENX-S/mimalloc3-rs/blob/main/libmimalloc3-sys/Cargo.toml
 [features]
 default = []
 static = ["libmimalloc3-sys/static"]
+win_crt_static = ["libmimalloc3-sys/win_crt_static"]
 shared = ["libmimalloc3-sys/shared"]
-secure= ["libmimalloc3-sys/secure"]
+secure = ["libmimalloc3-sys/secure"]
 debug_full = ["libmimalloc3-sys/debug_full"]
 padding = ["libmimalloc3-sys/padding"]
 override = ["libmimalloc3-sys/override"]
