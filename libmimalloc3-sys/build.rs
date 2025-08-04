@@ -1,17 +1,27 @@
-use std::process::Command;
+use std::env;
+use build_target::{Os, Family, Env, Arch};
+
+const APPLE_SILICON_PAGESIZE: usize = 16384;
 
 fn main() {
     #[cfg(all(feature = "static", feature = "shared"))]
-    compile_error!("You have enabled both 'static' and 'shared' features, which conflicts. You must choose one linking method: 'static' for static linking, or 'shared' for dynamic linking.");
+    compile_error!("You have enabled both \"static\" and 'shared' features, which conflicts.\nYou MUST choose one linking method: \"static\" for static linking, or \"shared\" for dynamic linking.");
 
     #[cfg(not(any(feature = "static", feature = "shared")))]
-    compile_error!("You must enable exactly one of the features: 'static' or 'shared'.");
+    compile_error!("You MUST enable exactly one of the features: \"static\" or \"shared\".");
 
-    #[cfg(all(feature = "static", feature = "override", target_os = "windows"))]
-    compile_error!("It is only possible to override malloc on Windows when building as a DLL.");
+    let target_os = build_target::target_os();
+    let target_env = build_target::target_env();
+    let target_arch = build_target::target_arch();
+    let target_family = build_target::target_family();
+
+    #[cfg(all(feature = "static", feature = "override"))]
+    if matches!(target_os, Os::Windows) {
+        panic!("It is only possible to override malloc on Windows when building as a DLL.");
+    }
 
     println!("cargo:rerun-if-changed=build.rs");
-    println!("cargo:rerun-if-changed=mimalloc/");
+    println!("cargo:rerun-if-changed=mimalloc");
 
     let mut cfg = cmake::Config::new("mimalloc");
 
@@ -56,8 +66,8 @@ fn main() {
     });
     feat_opt!("see_asm", "MI_SEE_ASM");
 
-    #[cfg(target_os = "macos")]
-    {
+    let is_apple_os = matches!(target_os, Os::MacOS|Os::iOS|Os::TvOS|Os::WatchOS|Os::VisionOS);
+    if is_apple_os {
         feat_opt!("osx_interpose", {
             cfg.define("MI_OSX_INTERPOSE", "ON");
             #[cfg(all(feature = "shared", feature = "use_cxx"))]
@@ -66,17 +76,18 @@ fn main() {
         feat_opt!("osx_zone", "MI_OSX_ZONE");
     }
 
-    #[cfg(target_os = "windows")]
-    {
+    if matches!(target_os, Os::Windows) {
         feat_opt!("win_redirect", "MI_WIN_REDIRECT");
         feat_opt!("win_use_fixed_tls", "MI_WIN_USE_FIXED_TLS");
     }
 
-    #[cfg(target_family = "unix")]
-    feat_opt!("local_dynamic_tls", "MI_LOCAL_DYNAMIC_TLS");
+    if target_family.contains(&Family::Unix) {
+        feat_opt!("local_dynamic_tls", "MI_LOCAL_DYNAMIC_TLS");
+    }
 
-    #[cfg(target_env = "musl")]
-    cfg.define("MI_LIBC_MUSL", "ON");
+    if matches!(target_env, Some(Env::Musl)) {
+        cfg.define("MI_LIBC_MUSL", "ON");
+    }
 
     feat_opt!("debug_asan", "MI_DEBUG_ASAN");
     feat_opt!("debug_ubsan", "MI_DEBUG_UBSAN");
@@ -93,45 +104,44 @@ fn main() {
     feat_opt!("skip_collect_on_exit", "MI_SKIP_COLLECT_ON_EXIT");
     feat_opt!("no_padding", "MI_NO_PADDING");
 
-    #[cfg(any(target_os = "linux", target_os = "android"))]
-    feat_opt!("no_thp", "MI_NO_THP");
+    if matches!(target_os, Os::Linux|Os::Android) {
+        feat_opt!("no_thp", "MI_NO_THP");
+    }
 
-    // When using a GNU-like compiler, the `__thread` keyword for thread-local storage
-    // (as used in mimalloc) implies a dependency on the `__emutls_get_address` symbol.
-    // We must explicitly link against libgcc_eh to provide this symbol.
+    // mimalloc's use of `__thread` for thread-local storage on GNU-like compilers requires `__emutls_get_address`
     if cc::Build::new().get_compiler().is_like_gnu() {
         println!("cargo:rustc-link-lib=gcc_eh");
     }
 
-    // Workaround for Apple Silicon (aarch64) macOS.
-    // The default MI_ARENA_SLICE_SIZE in mimalloc fails to satisfy the
-    // `_mi_os_page_size() <= (MI_ARENA_SLICE_SIZE / 8)` assertion on this platform.
-    // This script dynamically retrieves the OS page size and overrides the macro
-    // to ensure the assertion passes.
-    #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
-    {
-        let output = Command::new("getconf").arg("PAGESIZE").output().unwrap();
-        if output.status.success() {
-            let pagesize: usize = std::str::from_utf8(&output.stdout).unwrap().trim().parse().unwrap();
-            let arena_slice_size = pagesize * 8;
-            let out_dir = std::path::PathBuf::from(std::env::var("OUT_DIR").unwrap());
-            let header_path = out_dir.join("override_mi_arena_slice_size.h");
-            let mimalloc_include_path = std::env::current_dir().unwrap().join("mimalloc/include");
-            let types_header_path = mimalloc_include_path.join("mimalloc/types.h");
-            let header_content = format!(r#"#include "{}"
+    // Workaround for Apple Silicon (aarch64-apple-*).
+    //
+    // The default configuration of mimalloc is not compatible with the 16KB memory page size on Apple Silicon.
+    // This mismatch causes an assertion failure: `_mi_os_page_size() <= (MI_ARENA_SLICE_SIZE / 8)`.
+    // mimalloc is designed assuming a smaller page size (e.g., 4KB or 8KB).
+    //
+    // To resolve this, we override `MI_ARENA_SLICE_SIZE` to `16KB * 8` to satisfy the assertion.
+    // This is achieved by generating a header file with the new definition and forcing its inclusion
+    // during the build.
+    let is_apple_silicon = is_apple_os && matches!(target_arch, Arch::AArch64);
+    if is_apple_silicon {
+        let arena_slice_size = APPLE_SILICON_PAGESIZE * 8;
+        let out_dir = std::path::PathBuf::from(env::var("OUT_DIR").unwrap());
+        let header_path = out_dir.join("override_mi_arena_slice_size.h");
+        let mimalloc_include_path = env::current_dir().unwrap().join("mimalloc/include");
+        let types_header_path = mimalloc_include_path.join("mimalloc/types.h");
+        let header_content = format!(r#"#include "{}"
 
 #ifdef MI_ARENA_SLICE_SIZE
 #undef MI_ARENA_SLICE_SIZE
 #endif
 
 #define MI_ARENA_SLICE_SIZE ({})"#, types_header_path.display(), arena_slice_size);
-            std::fs::write(&header_path, header_content).unwrap();
-            let flag = format!("-I{} -include {}", mimalloc_include_path.display(), header_path.display());
-            if cfg!(feature = "use_cxx") {
-                cfg.cxxflag(flag);
-            } else {
-                cfg.cflag(flag);
-            }
+        std::fs::write(&header_path, header_content).unwrap();
+        let flag = format!("-I{} -include {}", mimalloc_include_path.display(), header_path.display());
+        if cfg!(feature = "use_cxx") {
+            cfg.cxxflag(flag);
+        } else {
+            cfg.cflag(flag);
         }
     }
 

@@ -14,6 +14,7 @@ build = "build.rs"
 [build-dependencies]
 cc = "1"
 cmake = "0.1"
+build-target = "0.8"
 
 [features]
 default = ["override", "static"]
