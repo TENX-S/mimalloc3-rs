@@ -102,9 +102,11 @@ fn main() {
             if cc_is_gnu_like {
                 flags.push("-Wno-attributes");
             }
-            println!("cargo:rustc-link-lib=stdc++");
+
             if cfg!(feature = "win_crt_static") {
-                println!("cargo:rustc-link-arg=-static-libstdc++")
+                println!("cargo:rustc-link-arg=-static");
+            } else if cfg!(feature = "use_cxx") {
+                println!("cargo:rustc-link-lib=stdc++");
             }
         }
 
