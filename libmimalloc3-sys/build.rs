@@ -1,5 +1,6 @@
 use build_target::{Arch, Env, Family, Os};
 use std::env;
+use std::path::PathBuf;
 
 const APPLE_SILICON_PAGESIZE: usize = 16384;
 
@@ -21,6 +22,7 @@ fn main() {
     }
 
     println!("cargo:rerun-if-changed=build.rs");
+    println!("cargo:rerun-if-changed=src/lib.rs");
     println!("cargo:rerun-if-changed=mimalloc");
 
     let mut flags = Vec::new();
@@ -55,6 +57,7 @@ fn main() {
     feat_opt!("secure", "MI_SECURE");
     feat_opt!("debug_full", "MI_DEBUG_FULL");
     feat_opt!("padding", "MI_PADDING");
+    cfg.define("MI_OVERRIDE", "OFF");
     feat_opt!("override", "MI_OVERRIDE");
     feat_opt!("xmalloc", "MI_XMALLOC");
     feat_opt!("show_errors", "MI_SHOW_ERRORS");
@@ -69,15 +72,19 @@ fn main() {
 
     let is_apple_os = matches!(target_os, Os::MacOS|Os::iOS|Os::TvOS|Os::WatchOS|Os::VisionOS);
     if is_apple_os {
+        cfg.define("MI_OSX_INTERPOSE", "OFF");
         feat_opt!("osx_interpose", {
             cfg.define("MI_OSX_INTERPOSE", "ON");
             #[cfg(all(feature = "shared", feature = "use_cxx"))]
             println!("cargo:warning=if dynamically overriding malloc/free, it is more reliable to build mimalloc as C code (don't enable feature use-cxx)")
         });
+        cfg.define("MI_OSX_ZONE", "OFF");
         feat_opt!("osx_zone", "MI_OSX_ZONE");
+
     }
 
-    let cc_is_gnu_like = cc::Build::new().get_compiler().is_like_gnu();
+    let compiler = cc::Build::new().get_compiler();
+
     if matches!(target_os, Os::Windows) {
         feat_opt!("win_redirect", "MI_WIN_REDIRECT");
         feat_opt!("win_use_fixed_tls", "MI_WIN_USE_FIXED_TLS");
@@ -88,31 +95,33 @@ fn main() {
             // Rust typically defaults to "MultiThreadedDLL" (see rust-lang/rust#39016), while mimalloc
             // might select a debug CRT in dev builds, causing linker errors.
             // To resolve this, we explicitly set the runtime library.
-            if cfg!(feature = "win_crt_static") {
-                // If the "win_crt_static" feature is active, we must use the static, non-debug CRT
-                // to ensure the entire application uses a consistent static runtime.
+            let target_feature = env::var("CARGO_CFG_TARGET_FEATURE").unwrap();
+            if target_feature.contains("crt-static") {
                 cfg.define("CMAKE_MSVC_RUNTIME_LIBRARY", "MultiThreaded");
             } else {
-                // Otherwise, we align with Rust's standard practice by linking against the dynamic,
-                // non-debug CRT. This prevents symbol conflicts with debug versions of the CRT.
                 cfg.define("CMAKE_MSVC_RUNTIME_LIBRARY", "MultiThreadedDLL");
             }
         }
-        if matches!(target_env, Some(Env::Gnu)) {
-            if cc_is_gnu_like {
-                flags.push("-Wno-attributes");
-            }
 
-            if cfg!(feature = "win_crt_static") {
-                println!("cargo:rustc-link-arg=-static");
-            } else if cfg!(feature = "use_cxx") {
-                println!("cargo:rustc-link-lib=stdc++");
-            }
+        if compiler.is_like_gnu() {
+            flags.push("-Wno-attributes");
         }
 
         for lib in ["psapi", "shell32", "user32", "advapi32", "bcrypt"] {
             println!("cargo:rustc-link-lib={}", lib);
         }
+    }
+
+    // mimalloc's use of `__thread` for thread-local storage on GNU-like compilers requires `__emutls_get_address`
+    if compiler.is_like_gnu() {
+        if cfg!(feature = "use_cxx") {
+            println!("cargo:rustc-link-lib=stdc++");
+        }
+        println!("cargo:rustc-link-lib=gcc_eh");
+    }
+
+    if compiler.is_like_clang() && cfg!(feature = "use_cxx") {
+        println!("cargo:rustc-link-lib=c++");
     }
 
     if target_family.contains(&Family::Unix) {
@@ -139,11 +148,6 @@ fn main() {
 
     if matches!(target_os, Os::Linux|Os::Android) {
         feat_opt!("no_thp", "MI_NO_THP");
-    }
-
-    // mimalloc's use of `__thread` for thread-local storage on GNU-like compilers requires `__emutls_get_address`
-    if cc_is_gnu_like {
-        println!("cargo:rustc-link-lib=gcc_eh");
     }
 
     // Workaround for Apple Silicon (aarch64-apple-*).
@@ -182,7 +186,12 @@ fn main() {
         }
     }
 
-    println!("cargo:rustc-link-search=native={}/lib/mimalloc-3.1", cfg.build().display());
+    let mut lib_path = vec![cfg.build().display().to_string(), "lib".to_owned()];
+    if cfg!(feature = "static") {
+        lib_path.push("mimalloc-3.1".to_owned());
+    }
+
+    println!("cargo:rustc-link-search=native={}", lib_path.iter().collect::<PathBuf>().display());
 
     let mut lib = "mimalloc".to_owned();
     if cfg!(feature = "secure") {

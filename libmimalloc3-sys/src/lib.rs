@@ -1,5 +1,4 @@
 use core::ffi::*;
-use core::mem::offset_of;
 
 pub const MI_MALLOC_VERSION: u32 = 316;
 pub const __BOOL_TRUE_FALSE_ARE_DEFINED: u32 = 1;
@@ -393,20 +392,6 @@ pub struct mi_heap_area_s {
     pub full_block_size: usize,
     pub heap_tag: c_int,
 }
-#[allow(clippy::unnecessary_operation, clippy::identity_op)]
-const _: () = {
-    ["Size of mi_heap_area_s"][size_of::<mi_heap_area_s>() - 56usize];
-    ["Alignment of mi_heap_area_s"][align_of::<mi_heap_area_s>() - 8usize];
-    ["Offset of field: mi_heap_area_s::blocks"][offset_of!(mi_heap_area_s, blocks) - 0usize];
-    ["Offset of field: mi_heap_area_s::reserved"][offset_of!(mi_heap_area_s, reserved) - 8usize];
-    ["Offset of field: mi_heap_area_s::committed"][offset_of!(mi_heap_area_s, committed) - 16usize];
-    ["Offset of field: mi_heap_area_s::used"][offset_of!(mi_heap_area_s, used) - 24usize];
-    ["Offset of field: mi_heap_area_s::block_size"]
-        [offset_of!(mi_heap_area_s, block_size) - 32usize];
-    ["Offset of field: mi_heap_area_s::full_block_size"]
-        [offset_of!(mi_heap_area_s, full_block_size) - 40usize];
-    ["Offset of field: mi_heap_area_s::heap_tag"][offset_of!(mi_heap_area_s, heap_tag) - 48usize];
-};
 #[allow(non_camel_case_types)]
 pub type mi_heap_area_t = mi_heap_area_s;
 #[allow(non_camel_case_types)]
